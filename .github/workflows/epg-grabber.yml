@@ -1,0 +1,169 @@
+name: EPG Grabber
+
+on:
+  schedule:
+    # 18:30 UTC = 00:00 IST
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  grab-epg:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: code
+
+      - name: Get EPG Framework
+        uses: actions/checkout@v4
+        with:
+          repository: iptv-org/epg
+          path: iptv-epg
+          fetch-depth: 1
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: iptv-epg/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: iptv-epg
+        run: |
+          npm install --no-audit --no-fund
+
+      - name: Grab EPG Data From DishTV
+        working-directory: iptv-epg
+        run: |
+          mkdir -p guides
+          # DishTV: Standard grab configured for 7 days data retention
+          npm run grab -- \
+            --sites=dishtv.in \
+            --days=7 \
+            --output=guides/dishtv_guide.xml
+
+      - name: Validate Generated EPG Files
+        run: |
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          file = Path("iptv-epg/guides/dishtv_guide.xml")
+
+          if not file.exists():
+              print(f"Critical Error: {file} was not generated.")
+              sys.exit(1)
+
+          try:
+              root = ET.parse(file).getroot()
+              channels = root.findall("channel")
+              programs = root.findall("programme")
+              print(f"{file}: {len(channels)} channels, {len(programs)} programs")
+              
+              if len(channels) == 0:
+                  print(f"Critical Error: {file} contains no channel structure.")
+                  sys.exit(1)
+          except Exception as e:
+              print(f"Critical Error: {file} is corrupted. {e}")
+              sys.exit(1)
+          PY
+
+      - name: Copy and Process EPG
+        run: |
+          cp iptv-epg/guides/dishtv_guide.xml dishtv_guide.xml
+          
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          import copy
+          
+          def clean_provider_id(val):
+              if not val:
+                  return "unknown"
+              return val[:-3] if val.endswith('.in') else val
+
+          def process_epg():
+              try:
+                  dish_tree = ET.parse('dishtv_guide.xml')
+                  dish_root = dish_tree.getroot()
+                  
+                  final_root = ET.Element('tv', {'generator-info-name': 'DishTV-Sorted-EPG'})
+                  channel_list = []
+                  programme_list = []
+                  
+                  # DishTV Process
+                  for channel in dish_root.findall('channel'):
+                      ch = copy.deepcopy(channel)
+                      clean_id = clean_provider_id(ch.get('id'))
+                      ch.set('id', f'{clean_id}.dt')
+                      disp = ch.find('display-name')
+                      if disp is not None:
+                          name_text = disp.text if disp.text else clean_id
+                          disp.text = name_text
+                          channel_list.append((name_text.lower(), ch))
+                      else:
+                          channel_list.append((clean_id.lower(), ch))
+                      
+                  for prog in dish_root.findall('programme'):
+                      p = copy.deepcopy(prog)
+                      raw_ch = p.get('channel')
+                      p.set('channel', f'{clean_provider_id(raw_ch)}.dt')
+                      programme_list.append(p)
+                  
+                  # FIXED: Properly sorting by the string name (0th element of the tuple)
+                  channel_list.sort(key=lambda x: x[0])
+                  
+                  # FIXED: Appending the XML element object (1st element of the tuple)
+                  for sorted_tuple in channel_list:
+                      final_root.append(sorted_tuple[1])
+                      
+                  for prog in programme_list:
+                      final_root.append(prog)
+                  
+                  output_tree = ET.ElementTree(final_root)
+                  ET.indent(final_root, space='  ', level=0)
+                  output_tree.write('guide.xml', encoding='utf-8', xml_declaration=True)
+                  print('DishTV EPG Processing Completed Successfully.')
+              except Exception as e:
+                  print(f'Merge/Process Error: {e}')
+                  sys.exit(1)
+                  
+          process_epg()
+          PY
+
+      - name: Compress EPG Guide
+        run: |
+          gzip -9 -c guide.xml > guide.xml.gz
+          echo "Compression complete. guide.xml.gz created."
+
+      - name: Deploy EPG to Main Branch Only
+        run: |
+          git config --global user.name "actions-user"
+          git config --global user.email "actions@github.com"
+          
+          # 1. Back up the generated guide.xml.gz file outside the workspace
+          mkdir ../temp_epg
+          cp guide.xml.gz ../temp_epg/
+          
+          # 2. Target the main branch and switch over to it
+          git fetch origin main || true
+          git checkout main || git checkout -b main
+          
+          # 3. Clean and wipe all source files from the branch view
+          rm -rf *
+          
+          # 4. Bring the compressed guide.xml.gz file back to the root directory
+          mv ../temp_epg/guide.xml.gz .
+          
+          # 5. Push the updated data using a force push to completely clear out the public branch
+          git add guide.xml.gz
+          git diff --cached --quiet || git commit -m "DishTV [7 Days] EPG Updated at $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push origin main --force
+

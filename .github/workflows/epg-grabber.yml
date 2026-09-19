@@ -44,7 +44,7 @@ jobs:
           mkdir -p guides
           # Configured to grab 7 days of schedule data from both DishTV and AirtelTV
           npm run grab -- --sites=dishtv.in --days=7 --output=guides/dishtv_guide.xml
-          npm run grab -- --sites=airtel.in --days=7 --output=guides/airtel_guide.xml || true
+          npm run grab -- --sites=airtelxstream.in --days=7 --output=guides/airtel_guide.xml
 
       - name: Copy Files for Processing
         run: |

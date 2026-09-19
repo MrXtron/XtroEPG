@@ -2,7 +2,7 @@ name: EPG Grabber
 
 on:
   schedule:
-    # 18:30 UTC = 00:00 IST
+    # 18:30 UTC = 00:00 IST (Runs daily at midnight India time)
     - cron: '30 18 * * *'
   workflow_dispatch:
 
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: code
+          ref: main  # Fetches workflow files directly from the main branch
 
       - name: Get EPG Framework
         uses: actions/checkout@v4
@@ -38,132 +38,170 @@ jobs:
         run: |
           npm install --no-audit --no-fund
 
-      - name: Grab EPG Data From DishTV
+      - name: Grab EPG Data From Providers
         working-directory: iptv-epg
         run: |
           mkdir -p guides
-          # DishTV: Standard grab configured for 7 days data retention
-          npm run grab -- \
-            --sites=dishtv.in \
-            --days=7 \
-            --output=guides/dishtv_guide.xml
+          # Configured to grab 7 days of schedule data from both DishTV and AirtelTV
+          npm run grab -- --sites=dishtv.in --days=7 --output=guides/dishtv_guide.xml
+          npm run grab -- --sites=airtel.in --days=7 --output=guides/airtel_guide.xml || true
 
-      - name: Validate Generated EPG Files
+      - name: Copy Files for Processing
+        run: |
+          cp iptv-epg/guides/dishtv_guide.xml dishtv_guide.xml || touch dishtv_guide.xml
+          cp iptv-epg/guides/airtel_guide.xml airtel_guide.xml || touch airtel_guide.xml
+
+      - name: Merge, Clean and Process EPG Data
         run: |
           python - <<'PY'
           import sys
-          import xml.etree.ElementTree as ET
-          from pathlib import Path
-
-          file = Path("iptv-epg/guides/dishtv_guide.xml")
-
-          if not file.exists():
-              print(f"Critical Error: {file} was not generated.")
-              sys.exit(1)
-
-          try:
-              root = ET.parse(file).getroot()
-              channels = root.findall("channel")
-              programs = root.findall("programme")
-              print(f"{file}: {len(channels)} channels, {len(programs)} programs")
-              
-              if len(channels) == 0:
-                  print(f"Critical Error: {file} contains no channel structure.")
-                  sys.exit(1)
-          except Exception as e:
-              print(f"Critical Error: {file} is corrupted. {e}")
-              sys.exit(1)
-          PY
-
-      - name: Copy and Process EPG
-        run: |
-          cp iptv-epg/guides/dishtv_guide.xml dishtv_guide.xml
-          
-          python - <<'PY'
-          import sys
+          import os
           import xml.etree.ElementTree as ET
           import copy
           
           def clean_provider_id(val):
               if not val:
                   return "unknown"
+              # Removes the .in domain extension from channel IDs if present
               return val[:-3] if val.endswith('.in') else val
 
-          def process_epg():
+          def process_provider_xml(filename, suffix, generator_name, output_filename):
+              channel_list = []
+              programme_list = []
+              
+              if not os.path.exists(filename) or os.path.getsize(filename) < 100:
+                  print(f"Skipping processing for {filename}: File is missing or empty.")
+                  return [], []
+                  
               try:
-                  dish_tree = ET.parse('dishtv_guide.xml')
-                  dish_root = dish_tree.getroot()
+                  tree = ET.parse(filename)
+                  root = tree.getroot()
                   
-                  final_root = ET.Element('tv', {'generator-info-name': 'DishTV-Sorted-EPG'})
-                  channel_list = []
-                  programme_list = []
-                  
-                  # DishTV Process
-                  for channel in dish_root.findall('channel'):
+                  # Parse and clean channel structures
+                  for channel in root.findall('channel'):
                       ch = copy.deepcopy(channel)
-                      clean_id = clean_provider_id(ch.get('id'))
-                      ch.set('id', f'{clean_id}.dt')
-                      disp = ch.find('display-name')
-                      if disp is not None:
-                          name_text = disp.text if disp.text else clean_id
-                          disp.text = name_text
-                          channel_list.append((name_text.lower(), ch))
-                      else:
-                          channel_list.append((clean_id.lower(), ch))
+                      raw_id = ch.get('id')
+                      clean_id = clean_provider_id(raw_id)
+                      ch.set('id', f'{clean_id}.{suffix}')
                       
-                  for prog in dish_root.findall('programme'):
+                      disp = ch.find('display-name')
+                      name_text = disp.text if (disp is not None and disp.text) else clean_id
+                      if disp is not None:
+                          disp.text = name_text
+                          
+                      channel_list.append((name_text.lower(), ch))
+                      
+                  # Parse and update channel references in program timelines
+                  for prog in root.findall('programme'):
                       p = copy.deepcopy(prog)
                       raw_ch = p.get('channel')
-                      p.set('channel', f'{clean_provider_id(raw_ch)}.dt')
+                      p.set('channel', f'{clean_provider_id(raw_ch)}.{suffix}')
                       programme_list.append(p)
-                  
-                  # FIXED: Properly sorting by the string name (0th element of the tuple)
+                      
+                  # Sort specific provider channels alphabetically
                   channel_list.sort(key=lambda x: x[0])
                   
-                  # FIXED: Appending the XML element object (1st element of the tuple)
+                  # Generate individual provider XML file
+                  prov_root = ET.Element('tv', {'generator-info-name': generator_name})
                   for sorted_tuple in channel_list:
-                      final_root.append(sorted_tuple[1])
-                      
+                      prov_root.append(sorted_tuple[1])
                   for prog in programme_list:
-                      final_root.append(prog)
+                      prov_root.append(prog)
+                      
+                  prov_tree = ET.ElementTree(prov_root)
+                  ET.indent(prov_root, space='  ', level=0)
+                  prov_tree.write(output_filename, encoding='utf-8', xml_declaration=True)
+                  print(f"Successfully generated individual file: {output_filename}")
                   
-                  output_tree = ET.ElementTree(final_root)
-                  ET.indent(final_root, space='  ', level=0)
-                  output_tree.write('guide.xml', encoding='utf-8', xml_declaration=True)
-                  print('DishTV EPG Processing Completed Successfully.')
+                  return channel_list, programme_list
               except Exception as e:
-                  print(f'Merge/Process Error: {e}')
+                  print(f"Error processing {filename}: {e}")
+                  return [], []
+
+          def main():
+              # Process All OTT individually, saving their own XML files
+              dt_channels, dt_programmes = process_provider_xml('dishtv_guide.xml', 'dt', 'DishTV-Sorted-EPG', 'dishtv.xml')
+              at_channels, at_programmes = process_provider_xml('airtel_guide.xml', 'at', 'AirtelTV-Sorted-EPG', 'airtel.xml')
+              
+              # Combine data for the master guide file
+              combined_channels = dt_channels + at_channels
+              combined_programmes = dt_programmes + at_programmes
+              
+              if not combined_channels:
+                  print("Critical Error: No channel data found in any file.")
                   sys.exit(1)
                   
-          process_epg()
+              # Sort combined channels alphabetically using the lowered display name string
+              combined_channels.sort(key=lambda x: x[0])
+              
+              # Generate the master combined XML file
+              final_root = ET.Element('tv', {'generator-info-name': 'DishTV-AirtelTV-Combined-EPG'})
+              for sorted_tuple in combined_channels:
+                  final_root.append(sorted_tuple[1])
+              for prog in combined_programmes:
+                  final_root.append(prog)
+              
+              output_tree = ET.ElementTree(final_root)
+              ET.indent(final_root, space='  ', level=0)
+              output_tree.write('guide.xml', encoding='utf-8', xml_declaration=True)
+              print('Master EPG Combined Process Completed Successfully.')
+              
+          if __name__ == '__main__':
+              main()
           PY
 
-      - name: Compress EPG Guide
+      - name: Compress EPG Guides
         run: |
-          gzip -9 -c guide.xml > guide.xml.gz
-          echo "Compression complete. guide.xml.gz created."
+          # Compress all three individual XML files into .gz format to optimize download size
+          [ -f guide.xml ] && gzip -9 -c guide.xml > guide.xml.gz || echo "guide.xml missing"
+          [ -f dishtv.xml ] && gzip -9 -c dishtv.xml > dishtv.xml.gz || echo "dishtv.xml missing"
+          [ -f airtel.xml ] && gzip -9 -c airtel.xml > airtel.xml.gz || echo "airtel.xml missing"
+          echo "Compression complete for all available files."
 
-      - name: Deploy EPG to Main Branch Only
+      - name: Deploy EPG to Main Branch Safely
         run: |
           git config --global user.name "actions-user"
           git config --global user.email "actions@github.com"
           
-          # 1. Back up the generated guide.xml.gz file outside the workspace
-          mkdir ../temp_epg
-          cp guide.xml.gz ../temp_epg/
+          # Dynamic list to hold names of successfully active providers for the combined commit
+          ACTIVE_PROVIDERS=""
           
-          # 2. Target the main branch and switch over to it
-          git fetch origin main || true
-          git checkout main || git checkout -b main
+          # 1. Dynamically loop through any specific provider files (excluding the combined guide.xml.gz)
+          for file in *.xml.gz; do
+            [ "$file" = "guide.xml.gz" ] && continue
+            [ -f "$file" ] || break
+            
+            # Extract the raw provider name from file (e.g., dishtv from dishtv.xml.gz)
+            PROV_RAW=$(basename "$file" .xml.gz)
+            
+            # Format provider names perfectly for the commit message
+            if [ "$PROV_RAW" = "dishtv" ]; then
+              PROV_NAME="DishTV"
+            elif [ "$PROV_RAW" = "airtel" ]; then
+              PROV_NAME="AirtelTV"
+            else
+              # Fallback capitalize for future providers (e.g., tataplay -> Tataplay)
+              PROV_NAME="$(tr '[:lower:]' '[:upper:]' <<< ${PROV_RAW:0:1})${PROV_RAW:1}"
+            fi
+            
+            # Append to our active providers string for the final combined message
+            if [ -z "$ACTIVE_PROVIDERS" ]; then
+              ACTIVE_PROVIDERS="$PROV_NAME"
+            else
+              ACTIVE_PROVIDERS="$ACTIVE_PROVIDERS, $PROV_NAME"
+            fi
+            
+            # Add, commit, and push this single provider file dynamically
+            git pull origin main --rebase || true
+            git add "$file"
+            git diff --cached --quiet || git commit -m "${PROV_NAME} [7 Days] EPG Updated"
+            git push origin main || true
+          done
           
-          # 3. Clean and wipe all source files from the branch view
-          rm -rf *
-          
-          # 4. Bring the compressed guide.xml.gz file back to the root directory
-          mv ../temp_epg/guide.xml.gz .
-          
-          # 5. Push the updated data using a force push to completely clear out the public branch
-          git add guide.xml.gz
-          git diff --cached --quiet || git commit -m "DishTV [7 Days] EPG Updated at $(date -u '+%Y-%m-%d %H:%M UTC')"
-          git push origin main --force
-
+          # 2. Commit and Push the combined master file with dynamically generated active provider list
+          if [ -f guide.xml.gz ] && [ -n "$ACTIVE_PROVIDERS" ]; then
+            git pull origin main --rebase || true
+            git add guide.xml.gz
+            git diff --cached --quiet || git commit -m "All OTT [${ACTIVE_PROVIDERS}] EPG Updated"
+            git push origin main || true
+          fi

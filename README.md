@@ -2,8 +2,6 @@
 
 <h2 align='center'>✯ 𝗘𝗣𝗚 𝗚𝗨𝗜𝗗𝗘 𝗪𝗜𝗧𝗛 𝗖𝗔𝗧𝗖𝗛𝗨𝗣 ✯</h2>
 
-<br>
-
 <h2>💖 FEATURES :</h2>
 
 1. ✅ AIRTEL (7 Days) 𝐄𝐏𝐆

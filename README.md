@@ -1,6 +1,6 @@
 <p align="center"><img src="https://play-lh.googleusercontent.com/k9OXcYUYd2Id7jSLB_Yf2EdgeeU9gdD5wS_0fe8Ze7jSPi5YI6St7ROKkS0QPM4jcg" width="60" height="60"></p>
 
-<h2 align='center'>✯ 𝗘𝗣𝗚 𝗚𝗨𝗜𝗗𝗘 𝗪𝗜𝗧𝗛 𝗖𝗔𝗧𝗖𝗛𝗨𝗣 ✯</h2>
+<h2 align='center'>✯ 𝗘𝗣𝗚 𝗚𝗨𝗜𝗗𝗘 ✯</h2>
 
 <h2>💖 FEATURES :</h2>
 

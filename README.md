@@ -70,30 +70,34 @@ stream-url-here
 ```
 
 ## 🎯 Compatible Players
-✅ IPTV Smarters
-✅ TiviMate
-✅ OTT Navigator
-✅ Televizo
-✅ Kodi
-✅ VLC
-✅ XCIPTV
-✅ Perfect Player
+
+- ✅ IPTV Smarters
+- ✅ TiviMate
+- ✅ OTT Navigator
+- ✅ Televizo
+- ✅ Kodi
+- ✅ VLC
+- ✅ XCIPTV
+- ✅ Perfect Player
 
 ## 📋 Information
-Format: Compressed XML (.xml.gz)
-Update Frequency: Daily
-Guide Duration: 7 Days
-File Size: Optimized for fast loading
+ - Format: Compressed XML (.xml.gz)
+- Update Frequency: Daily
+- Guide Duration: 7 Days
+- File Size: Optimized for fast loading
 
-⚠️ Disclaimer
-This repository provides EPG data only
-No streams or copyrighted content is hosted here
-EPG accuracy depends on source providers
-For technical issues, please check your player settings
+## ⚠️ Disclaimer
+- This repository provides EPG data only
+- No streams or copyrighted content is hosted here
+- EPG accuracy depends on source providers
+- For technical issues, please check your player settings
 
+---
 
-<center> 💖 Thank You for Using EPG Guide </center>
+## 💖 Thank You for Using EPG Guide
 
-<center> If this project is helpful, please consider giving it a ⭐ </center>
+If this project is helpful, please consider giving it a ⭐
 
-<center> Made with ❤️ for the IPTV Community </center>
+Made with ❤️ for the IPTV Community
+
+---

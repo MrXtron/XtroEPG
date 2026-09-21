@@ -64,9 +64,10 @@ https://mrxtron.github.io/XtroEPG/TataPlay/tata.xml.gz
 Add EPG to your IPTV playlist:
 
 ```m3u
-#EXTM3U tvg-url="https://mrxtron.github.io/XtroEPG/epg.xml.gz"
-#EXTINF:-1 tvg-id="channel-id" tvg-name="Channel Name" tvg-logo="logo-url", Channel Name
-stream-url-here
+#EXTM3U url-tvg="https://mrxtron.github.io/XtroEPG/epg.xml.gz"
+
+#EXTINF:-1 tvg-id="channel-id" tvg-name="Channel Name" tvg-logo="https://example.com/logo.png" group-title="Entertainment",Channel Name
+https://example.com/stream.m3u8
 ```
 
 ## 🎯 Compatible Players

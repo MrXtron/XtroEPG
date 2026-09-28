@@ -16,8 +16,8 @@
 
 ## ✨ Features
 
-| Provider | Duration | Status |
-|----------|----------|--------|
+|   Provider   |   Duration   |  Status   |
+|--------------|--------------|-----------|
 | 📱 Airtel TV | 7 Days | ✅ Active |
 | 🎬 JioTV | 7 Days | ✅ Active |
 | 🛰️ Tata Play | 7 Days | ✅ Active |

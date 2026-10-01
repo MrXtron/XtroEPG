@@ -19,7 +19,7 @@
 |   Provider   |   Duration   |  Status   |
 |--------------|--------------|-----------|
 | 📱 Airtel TV | 7 Days | ✅ Active |
-| 🎬 JioTV | 7 Days | ✅ Active |
+| 🎬 JioTV | 7 Days | ❌ Inctive |
 | 🛰️ Tata Play | 7 Days | ✅ Active |
 | 🌐 All OTT | 7 Days | ✅ Active |
 

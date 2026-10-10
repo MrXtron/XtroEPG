@@ -37,27 +37,6 @@
 https://mrxtron.github.io/XtroEPG/epg.xml.gz
 ```
 
-
-### 📺 Airtel TV EPG Guide
-
-```py
-https://mrxtron.github.io/XtroEPG/AirtelTV/airtel.xml.gz
-```
-
-
-### 📱 JioTV EPG Guide
-
-```py
-https://mrxtron.github.io/XtroEPG/JioTV/jio.xml.gz
-```
-
-
-### 🛰️ Tata Play EPG Guide
-
-```py
-https://mrxtron.github.io/XtroEPG/TataPlay/tata.xml.gz
-```
-
 ---
 
 ## 🚀 Quick Start
